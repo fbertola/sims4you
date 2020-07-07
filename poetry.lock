@@ -401,6 +401,14 @@ python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*"
 version = "2.2.0"
 
 [[package]]
+category = "main"
+description = "Parse gdb machine interface output with Python"
+name = "pygdbmi"
+optional = false
+python-versions = "*"
+version = "0.9.0.3"
+
+[[package]]
 category = "dev"
 description = "Python parsing module"
 name = "pyparsing"
@@ -630,7 +638,7 @@ docs = ["sphinx", "jaraco.packaging (>=3.2)", "rst.linker (>=1.9)"]
 testing = ["jaraco.itertools", "func-timeout"]
 
 [metadata]
-content-hash = "a5b2d6d6deff0019477dd5baadf03ba1bb52eca29fe6da463b47501fda2d4f4a"
+content-hash = "e61e4b9d5d9c34d1d6a1db5b8ed5ed916e9a60e4476ed6db466a9e48d936fd8d"
 python-versions = "^3.7"
 
 [metadata.files]
@@ -771,6 +779,10 @@ pycodestyle = [
 pyflakes = [
     {file = "pyflakes-2.2.0-py2.py3-none-any.whl", hash = "sha256:0d94e0e05a19e57a99444b6ddcf9a6eb2e5c68d3ca1e98e90707af8152c90a92"},
     {file = "pyflakes-2.2.0.tar.gz", hash = "sha256:35b2d75ee967ea93b55750aa9edbbf72813e06a66ba54438df2cfac9e3c27fc8"},
+]
+pygdbmi = [
+    {file = "pygdbmi-0.9.0.3-py3-none-any.whl", hash = "sha256:8fd98dd2e72d82667a4aa3cc34aedf951fe0e8f7e257cbdfc8e0fb7da250dc75"},
+    {file = "pygdbmi-0.9.0.3.tar.gz", hash = "sha256:5bdf2f072e8f2f6471f19f8dcd87d6425c5d8069d47c0a5ffe8d0eff48cb171e"},
 ]
 pyparsing = [
     {file = "pyparsing-2.4.7-py2.py3-none-any.whl", hash = "sha256:ef9d7589ef3c200abe66653d3f1ab1033c3c419ae9b9bdb1240a85b024efc88b"},

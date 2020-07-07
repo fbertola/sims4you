@@ -1,3 +1,4 @@
+from src.utils.injector.injector import inject
 from tests.utils import TestProgram
 
 
@@ -13,7 +14,7 @@ def test_injection():
     try:
         program = TestProgram()
         p = program.run()
-        # inject(p.pid, "pyrasite/payloads/helloworld.py")
+        inject(p.pid, "./scripts/hello.py")
         program.stop()
         stdout, stderr = p.communicate()
         assert_output_contains(stdout, stderr, "Hello World!")

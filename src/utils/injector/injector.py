@@ -3,34 +3,17 @@ from pathlib import Path
 import subprocess
 
 from loguru import logger
+from pygdbmi.gdbcontroller import GdbController
 
 
-def inject(pid, file_name, exe_path=""):
-    if exe_path == "":
-        exe_path = Path(os.path.dirname(__file__)) / "bin" / "inject_python.exe"
-    file_name = Path(file_name)
+def inject(pid, filename):
+    filename = os.path.abspath(filename)
 
-    if file_name.exists():
-        with file_name.open() as code_file:
-            logger.debug(f"Reading content of '{file_name}'...")
+    gdb_controller = GdbController()
+    print(gdb_controller.write(f"attach {pid}"))
+    print(gdb_controller.write("call (int)PyGILState_Ensure()"))
+    # print(gdb_controller.write(f"call (int)PyRun_SimpleString(\"import sys; sys.path.insert(0, r\\\"{os.path.dirname(filename)}\\\"); sys.path.insert(0, r\\\"{os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))}\\\");  exec(open(\\\"{filename}\\\").read())\")"))
+    print(gdb_controller.write(f"call (int)PyRun_SimpleString(\"print(1)\")"))
+    print(gdb_controller.write("call (int)PyGILState_Release($1)"))
+    gdb_controller.exit()
 
-            code = code_file.read().replace('"', '\\"')
-
-            logger.debug(f"Code string:\n\n{code}\n\n")
-            logger.debug(f"Calling '{exe_path}' for PID {pid} ")
-
-            p = subprocess.Popen(
-                f'{exe_path} {pid} "{code}"',
-                shell=False,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-            )
-
-            out, err = p.communicate()
-
-            logger.debug(f"STDOUT:\n{out}")
-            logger.debug(f"STDERR:\n{err}")
-            return p.returncode == 0
-    else:
-        logger.error(f"File does not exists: {file_name}")
-        return False
