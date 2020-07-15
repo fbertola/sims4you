@@ -8,9 +8,9 @@ class TestProgram:
     def __init__(self):
         self.pid = None
         fd, self.filename = tempfile.mkstemp()
-        tmp_file = open(fd, 'w')
+        tmp_file = open(fd, "w")
         self.script = textwrap.dedent(
-            f"""
+            """
             import time
             while True:
                 time.sleep(0.1)
