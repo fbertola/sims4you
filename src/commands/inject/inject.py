@@ -10,7 +10,7 @@ def _check_if_python_process(json_out):
     return any(
         "PyRun_SimpleString" in key["payload"]
         for key in json_out
-        if key["type"] == "result" and key["payload"]
+        if (key["type"] == "result" or key["type"] == "console") and key["payload"]
     )
 
 
