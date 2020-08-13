@@ -1,22 +1,16 @@
+import atexit
 import itertools
 import json
 import socket
 import socketserver
 import struct
+import threading
 
 from protocolbuffers import PersistenceBlobs_pb2
 from server_commands.argument_helpers import get_optional_target, OptionalSimInfoParam
 
 
 class IPCError(Exception):
-    pass
-
-
-class UnknownMessageClass(IPCError):
-    pass
-
-
-class InvalidSerialization(IPCError):
     pass
 
 
@@ -32,55 +26,27 @@ def read_objects(sock):
     data = sock.recv(size - 4)
     if len(data) == 0:
         raise ConnectionClosed()
-    return Message.deserialize(json.loads(data))
+    return list((Message(o) for o in json.loads(data)))
 
 
-def _recursive_subclasses(cls):
-    classmap = {}
-    for subcls in cls.__subclasses__():
-        classmap[subcls.__name__] = subcls
-        classmap.update(_recursive_subclasses(subcls))
-    return classmap
+def write_objects(sock, objects):
+    data = json.dumps(list((o.get_payload() for o in objects)))
+    sock.sendall(struct.pack("!i", len(data) + 4))
+    sock.sendall(data.encode())
 
 
 class Message(object):
-    @classmethod
-    def deserialize(cls, objects):
-        classmap = _recursive_subclasses(cls)
-        serialized = []
-        for obj in objects:
-            if isinstance(obj, Message):
-                serialized.append(obj)
-            else:
-                try:
-                    serialized.append(
-                        classmap[obj["class"]](*obj["args"], **obj["kwargs"])
-                    )
-                except KeyError as e:
-                    raise UnknownMessageClass(e)
-                except TypeError as e:
-                    raise InvalidSerialization(e)
-        return serialized
+    def __init__(self, payload):
+        self.payload = payload
 
-    def serialize(self):
-        args, kwargs = self._get_args()
-        return {"class": type(self).__name__, "args": args, "kwargs": kwargs}
-
-    def _get_args(self):
-        return [], {}
-
-    def __repr__(self):
-        r = self.serialize()
-        args = ", ".join([repr(arg) for arg in r["args"]])
-        kwargs = "".join([", {}={}".format(k, repr(v)) for k, v in r["kwargs"].items()])
-        name = r["class"]
-        return "{}({}{})".format(name, args, kwargs)
+    def get_payload(self):
+        return self.payload
 
 
 class Server(socketserver.ThreadingTCPServer):
-    def __init__(self, server_address, callback, bind_and_activate=True):
+    def __init__(self, server_address, callback=None, bind_and_activate=True):
         if not callable(callback):
-            callback = lambda x: []
+            callback = lambda x: [Message(payload=randomize_facial_attributes())]
 
         class IPCHandler(socketserver.BaseRequestHandler):
             def handle(self):
@@ -89,7 +55,7 @@ class Server(socketserver.ThreadingTCPServer):
                         results = read_objects(self.request)
                     except ConnectionClosed as e:
                         return
-                    _write_objects(self.request, callback(results))
+                    write_objects(self.request, callback(results))
 
             self.address_family = socket.AF_INET
 
@@ -109,11 +75,21 @@ def randomize_facial_attributes():
     facial_attributes = PersistenceBlobs_pb2.BlobSimFacialCustomizationData()
     facial_attributes.MergeFromString(sim_info.facial_attributes)
 
-    print(str(facial_attributes.sculpts))
+    payload = {"sculpts": str(facial_attributes.sculpts)}
+
     for modifier in itertools.chain(
-        facial_attributes.face_modifiers, facial_attributes.body_modifiers
+            facial_attributes.face_modifiers, facial_attributes.body_modifiers
     ):
-        print(str(modifier.key))
+        payload[str(modifier.key)] = str(modifier.value)
 
     sim_info.facial_attributes = facial_attributes.SerializeToString()
-    return True
+    return payload
+
+
+server = Server(("127.0.0.1", 9000))
+server_thread = threading.Thread(target=server.serve_forever)
+server_thread.daemon = True
+server_thread.start()
+
+atexit.register(server.server_close)
+atexit.register(server.shutdown)

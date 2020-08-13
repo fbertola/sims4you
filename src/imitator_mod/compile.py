@@ -5,7 +5,7 @@ from zipfile import PyZipFile, ZIP_STORED
 import settings
 
 
-def compile_module(creator_name, ea_root, mods_folder, mod_name=None):
+def compile_module(creator_name, ea_root, mods_folder, mod_name=None, copy_to_mod_folder=True):
     src = os.path.join(ea_root, "Scripts")
     if not mod_name:
         mod_name = os.path.basename(
@@ -23,7 +23,9 @@ def compile_module(creator_name, ea_root, mods_folder, mod_name=None):
     for folder, subs, files in os.walk(src):
         zf.writepy(folder)
     zf.close()
-    shutil.copyfile(ts4script, ts4script_mods)
+
+    if copy_to_mod_folder:
+        shutil.copyfile(ts4script, ts4script_mods)
 
 
 if __name__ == "__main__":
