@@ -2,8 +2,6 @@ import json
 import socket
 import struct
 
-from src.imitator_mod.scripts.randomize_facial_attributes import Message, read_objects
-
 
 class Client(object):
     def __init__(self, server_address):
@@ -29,15 +27,27 @@ class Client(object):
 
     def send(self, objects):
         self._write_objects(self.sock, objects)
-        return read_objects(self.sock)
+        return self._read_objects(self.sock)
 
-    def _write_objects(self, sock, objects):
-        data = json.dumps(list((o.get_payload() for o in objects)))
+    @staticmethod
+    def _write_objects(sock, objects):
+        data = json.dumps(objects)
         sock.sendall(struct.pack("!i", len(data) + 4))
         sock.sendall(data.encode())
+
+    @staticmethod
+    def _read_objects(sock):
+        header = sock.recv(4)
+        if len(header) == 0:
+            raise ConnectionError()
+        size = struct.unpack("!i", header)[0]
+        data = sock.recv(size - 4)
+        if len(data) == 0:
+            raise ConnectionError()
+        return json.loads(data)
 
 
 if __name__ == "__main__":
     with Client(("127.0.0.1", 9000)) as client:
-        response = client.send([Message("Hello")])
+        response = client.send([{}])
     print("Received objects: {}".format(response))

@@ -4,56 +4,40 @@ import json
 import socket
 import socketserver
 import struct
-import threading
 
 from protocolbuffers import PersistenceBlobs_pb2
 from server_commands.argument_helpers import get_optional_target, OptionalSimInfoParam
-
-
-class IPCError(Exception):
-    pass
-
-
-class ConnectionClosed(IPCError):
-    pass
+import threading
 
 
 def read_objects(sock):
     header = sock.recv(4)
     if len(header) == 0:
-        raise ConnectionClosed()
+        raise ConnectionError()
     size = struct.unpack("!i", header)[0]
     data = sock.recv(size - 4)
     if len(data) == 0:
-        raise ConnectionClosed()
-    return list((Message(o) for o in json.loads(data)))
+        raise ConnectionError()
+    return json.loads(data)
 
 
 def write_objects(sock, objects):
-    data = json.dumps(list((o.get_payload() for o in objects)))
+    data = json.dumps(objects)
     sock.sendall(struct.pack("!i", len(data) + 4))
     sock.sendall(data.encode())
-
-
-class Message(object):
-    def __init__(self, payload):
-        self.payload = payload
-
-    def get_payload(self):
-        return self.payload
 
 
 class Server(socketserver.ThreadingTCPServer):
     def __init__(self, server_address, callback=None, bind_and_activate=True):
         if not callable(callback):
-            callback = lambda x: [Message(payload=randomize_facial_attributes())]
+            callback = lambda x: [randomize_facial_attributes()]
 
         class IPCHandler(socketserver.BaseRequestHandler):
             def handle(self):
                 while True:
                     try:
                         results = read_objects(self.request)
-                    except ConnectionClosed as e:
+                    except ConnectionError as e:
                         return
                     write_objects(self.request, callback(results))
 
@@ -69,8 +53,7 @@ def randomize_facial_attributes():
         None, target_type=OptionalSimInfoParam, _connection=None
     )
     if sim_info is None:
-        print("sim_info is None")
-        return False
+        return {"error": "SimInfo is None"}
 
     facial_attributes = PersistenceBlobs_pb2.BlobSimFacialCustomizationData()
     facial_attributes.MergeFromString(sim_info.facial_attributes)
@@ -78,7 +61,7 @@ def randomize_facial_attributes():
     payload = {"sculpts": str(facial_attributes.sculpts)}
 
     for modifier in itertools.chain(
-            facial_attributes.face_modifiers, facial_attributes.body_modifiers
+        facial_attributes.face_modifiers, facial_attributes.body_modifiers
     ):
         payload[str(modifier.key)] = str(modifier.value)
 
@@ -93,3 +76,4 @@ server_thread.start()
 
 atexit.register(server.server_close)
 atexit.register(server.shutdown)
+
