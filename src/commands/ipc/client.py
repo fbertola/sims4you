@@ -1,6 +1,7 @@
-import json
+import pickle
 import socket
 import struct
+import pprint
 
 
 class Client(object):
@@ -31,9 +32,9 @@ class Client(object):
 
     @staticmethod
     def _write_objects(sock, objects):
-        data = json.dumps(objects)
+        data = pickle.dumps(objects)
         sock.sendall(struct.pack("!i", len(data) + 4))
-        sock.sendall(data.encode())
+        sock.sendall(data)
 
     @staticmethod
     def _read_objects(sock):
@@ -44,10 +45,11 @@ class Client(object):
         data = sock.recv(size - 4)
         if len(data) == 0:
             raise ConnectionError()
-        return json.loads(data)
+        return pickle.loads(data)
 
 
 if __name__ == "__main__":
     with Client(("127.0.0.1", 9000)) as client:
-        response = client.send([{}])
-    print("Received objects: {}".format(response))
+        response = client.send([{"first_name": "ProvaUno", "last_name": "EGiaUnFail"}])
+    pretty_json = pprint.pformat(response)
+    print(pretty_json)
