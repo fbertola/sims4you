@@ -22,6 +22,17 @@ def compile_module(creator_name, ea_root, mods_folder, mod_name=None, copy_to_mo
     )
     for folder, subs, files in os.walk(src):
         zf.writepy(folder)
+
+    dirlist = sorted(os.listdir(src))
+
+    # Add all *.json files
+    for filename in dirlist:
+        path = os.path.join(src, filename)
+        root, ext = os.path.splitext(filename)
+
+        if ext == ".json":
+            zf.write(path, f"Scripts/{filename}")
+
     zf.close()
 
     if copy_to_mod_folder:

@@ -11,6 +11,8 @@ from protocolbuffers import PersistenceBlobs_pb2, Outfits_pb2
 from server_commands.argument_helpers import get_optional_target, OptionalSimInfoParam
 import threading
 
+from Scripts.data import *
+
 
 def read_objects(sock):
     header = sock.recv(4)
@@ -81,26 +83,49 @@ def randomize_facial_attributes(params):
 
         current_outfit = list(sim_proto.outfits.outfits)[sim_proto.current_outfit_index]
 
+        for modifier in facial_attributes.face_modifiers:
+            modifier.amount = params["face_mods"][str(modifier.key)]
+
+        facial_attributes.sculpts[:] = params["sculpts"]
+
+        casps = override_casps(current_outfit, params["casps"])
+
+        current_outfit.parts.ids[:] = list(int(c) for c in casps)
+
         payload = {
-            "type": str(type(sim_info)),
-            "face_modifiers": {},
-            "body_modifiers": {},
-            "sculpts": list(facial_attributes.sculpts),
-            "outfit": current_outfit
+            "face_mods": params["face_mods"],
+            "sculpts": params["sculpts"],
+            "outfit_parts": list(casps)
         }
 
-        for modifier in facial_attributes.face_modifiers:
-            payload["face_modifiers"][str(modifier.key)] = str(modifier.amount)
-
-        for modifier in facial_attributes.body_modifiers:
-            payload["body_modifiers"][str(modifier.key)] = str(modifier.amount)
-
         sim_info.facial_attributes = facial_attributes.SerializeToString()
+        sim_info.load_sim_info(sim_proto)
+        sim_info.resend_physical_attributes()
+
         return payload
 
     except Exception as e:
         exc_info = sys.exc_info()
         return {"exception": ''.join(traceback.format_exception(*exc_info))}
+
+
+def override_casps(current_outfit, casps):
+    other_casps = []
+    casps_ext_dict = {}
+    for casp in list(current_outfit.parts.ids):
+        if str(casp) in facial_casps:
+            casps_ext_dict[facial_casps[str(casp)]["body_type"]] = casp
+        else:
+            other_casps.append(casp)
+    for k, v in casps.items():
+        if v == "None":
+            continue
+
+        if k in casps_ext_dict:
+            casps_ext_dict[k] = v  # Override value
+        else:
+            other_casps.append(v)
+    return list(casps_ext_dict.values()) + other_casps
 
 
 server = Server(("127.0.0.1", 9000))
