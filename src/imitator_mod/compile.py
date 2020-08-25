@@ -5,7 +5,9 @@ from zipfile import PyZipFile, ZIP_STORED
 import settings
 
 
-def compile_module(creator_name, ea_root, mods_folder, mod_name=None, copy_to_mod_folder=True):
+def compile_module(
+    creator_name, ea_root, mods_folder, mod_name=None, copy_to_mod_folder=True
+):
     src = os.path.join(ea_root, "Scripts")
     if not mod_name:
         mod_name = os.path.basename(

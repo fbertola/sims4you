@@ -93,7 +93,7 @@ if __name__ == "__main__":
         "last_name": "EGiaUnFail",  # FIXME: should be configurable
         "face_mods": dict(face_mods),
         "sculpts": list((int(s) for s in sculpts)),
-        "casps": dict(casps)
+        "casps": dict(casps),
     }
 
     with Client(("127.0.0.1", 9000)) as client:

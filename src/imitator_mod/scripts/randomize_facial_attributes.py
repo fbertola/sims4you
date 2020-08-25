@@ -30,7 +30,7 @@ def write_objects(sock, objects):
         data = pickle.dumps(objects)
     except Exception as e:
         exc_info = sys.exc_info()
-        data = {"exception": ''.join(traceback.format_exception(*exc_info))}
+        data = {"exception": "".join(traceback.format_exception(*exc_info))}
 
     sock.sendall(struct.pack("!i", len(data) + 4))
     sock.sendall(data)
@@ -67,7 +67,9 @@ def randomize_facial_attributes(params):
             return {"error": f"cannot find Sim {first_name} {last_name}"}
 
         sim_info = get_optional_target(
-            OptionalSimInfoParam(str(info.id)), target_type=OptionalSimInfoParam, _connection=None
+            OptionalSimInfoParam(str(info.id)),
+            target_type=OptionalSimInfoParam,
+            _connection=None,
         )
 
         if sim_info is None:
@@ -76,7 +78,9 @@ def randomize_facial_attributes(params):
         facial_attributes = PersistenceBlobs_pb2.BlobSimFacialCustomizationData()
         facial_attributes.MergeFromString(sim_info.facial_attributes)
 
-        sim_proto = services.get_persistence_service().get_sim_proto_buff(sim_info.sim_id)
+        sim_proto = services.get_persistence_service().get_sim_proto_buff(
+            sim_info.sim_id
+        )
 
         if sim_proto is None:
             return {"error": "Cannot get SimInfo ProtoBuf object"}
@@ -95,7 +99,7 @@ def randomize_facial_attributes(params):
         payload = {
             "face_mods": params["face_mods"],
             "sculpts": params["sculpts"],
-            "outfit_parts": list(casps)
+            "outfit_parts": list(casps),
         }
 
         sim_info.facial_attributes = facial_attributes.SerializeToString()
@@ -106,7 +110,7 @@ def randomize_facial_attributes(params):
 
     except Exception as e:
         exc_info = sys.exc_info()
-        return {"exception": ''.join(traceback.format_exception(*exc_info))}
+        return {"exception": "".join(traceback.format_exception(*exc_info))}
 
 
 def override_casps(current_outfit, casps):
@@ -135,4 +139,3 @@ server_thread.start()
 
 atexit.register(server.server_close)
 atexit.register(server.shutdown)
-
