@@ -1,6 +1,6 @@
 import os
 import shutil
-from zipfile import PyZipFile, ZIP_STORED
+from zipfile import PyZipFile, ZIP_STORED, ZIP_DEFLATED
 
 import settings
 
@@ -20,7 +20,7 @@ def compile_module(
     ts4script_mods = os.path.join(os.path.join(mods_folder), mod_name + ".ts4script")
 
     zf = PyZipFile(
-        ts4script, mode="w", compression=ZIP_STORED, allowZip64=True, optimize=2
+        ts4script, mode="w", compression=ZIP_DEFLATED, allowZip64=True, optimize=2
     )
     for folder, subs, files in os.walk(src):
         zf.writepy(folder)

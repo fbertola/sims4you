@@ -1,5 +1,6 @@
 import atexit
 import pickle
+import random
 import socket
 import socketserver
 import struct
@@ -39,7 +40,7 @@ def write_objects(sock, objects):
 class Server(socketserver.ThreadingTCPServer):
     def __init__(self, server_address, callback=None, bind_and_activate=True):
         if not callable(callback):
-            callback = lambda x: [randomize_facial_attributes(o) for o in x]
+            callback = lambda x: [randomize_sim(o) for o in x]
 
         class IPCHandler(socketserver.BaseRequestHandler):
             def handle(self):
@@ -57,60 +58,44 @@ class Server(socketserver.ThreadingTCPServer):
         )
 
 
-def randomize_facial_attributes(params):
-    try:
-        first_name = params["first_name"]
-        last_name = params["last_name"]
-        info = services.sim_info_manager().get_sim_info_by_name(first_name, last_name)
+def create_casp_buckets():
+    casp_buckets = {}
 
-        if info is None:
-            return {"error": f"cannot find Sim {first_name} {last_name}"}
+    for k, v in facial_casps.items():
+        body_type = v["body_type"]
+        ages = v["age"]
+        genders = v["gender"]
 
-        sim_info = get_optional_target(
-            OptionalSimInfoParam(str(info.id)),
-            target_type=OptionalSimInfoParam,
-            _connection=None,
-        )
+        # FIXME: should be configurable
+        if ("Male" not in genders and "Unisex" not in genders) or "Adult" not in ages:
+            continue
 
-        if sim_info is None:
-            return {"error": "SimInfo is None"}
+        if body_type in casp_buckets:
+            casp_buckets[body_type].append(k)
+        else:
+            casp_buckets[body_type] = [k]
 
-        facial_attributes = PersistenceBlobs_pb2.BlobSimFacialCustomizationData()
-        facial_attributes.MergeFromString(sim_info.facial_attributes)
+    return casp_buckets
 
-        sim_proto = services.get_persistence_service().get_sim_proto_buff(
-            sim_info.sim_id
-        )
 
-        if sim_proto is None:
-            return {"error": "Cannot get SimInfo ProtoBuf object"}
+def create_sculpt_buckets():
+    sculpt_buckets = {}
 
-        current_outfit = list(sim_proto.outfits.outfits)[sim_proto.current_outfit_index]
+    for k, v in facial_sculpts.items():
+        region = v["region"]
+        ages = v["age"]
+        genders = v["gender"]
 
-        for modifier in facial_attributes.face_modifiers:
-            modifier.amount = params["face_mods"][str(modifier.key)]
+        # FIXME: should be configurable
+        if ("Male" not in genders and "Unisex" not in genders) or "Adult" not in ages:
+            continue
 
-        facial_attributes.sculpts[:] = params["sculpts"]
+        if region in sculpt_buckets:
+            sculpt_buckets[region].append(k)
+        else:
+            sculpt_buckets[region] = [k]
 
-        casps = override_casps(current_outfit, params["casps"])
-
-        current_outfit.parts.ids[:] = list(int(c) for c in casps)
-
-        payload = {
-            "face_mods": params["face_mods"],
-            "sculpts": params["sculpts"],
-            "outfit_parts": list(casps),
-        }
-
-        sim_info.facial_attributes = facial_attributes.SerializeToString()
-        sim_info.load_sim_info(sim_proto)
-        sim_info.resend_physical_attributes()
-
-        return payload
-
-    except Exception as e:
-        exc_info = sys.exc_info()
-        return {"exception": "".join(traceback.format_exception(*exc_info))}
+    return sculpt_buckets
 
 
 def override_casps(current_outfit, casps):
@@ -130,6 +115,143 @@ def override_casps(current_outfit, casps):
         else:
             other_casps.append(v)
     return list(casps_ext_dict.values()) + other_casps
+
+
+def get_sim_info(first_name, last_name):
+    info = services.sim_info_manager().get_sim_info_by_name(first_name, last_name)
+
+    if info is None:
+        return None
+
+    sim_info = get_optional_target(
+        OptionalSimInfoParam(str(info.id)),
+        target_type=OptionalSimInfoParam,
+        _connection=None,
+    )
+
+    return sim_info
+
+
+def randomize_facial_attributes(params):
+    try:
+        first_name = params["first_name"]
+        last_name = params["last_name"]
+
+        sim_info = get_sim_info(first_name, last_name)
+
+        if sim_info is None:
+            return {"error": f"cannot find Sim {first_name} {last_name}"}
+
+        facial_attributes = PersistenceBlobs_pb2.BlobSimFacialCustomizationData()
+        facial_attributes.MergeFromString(sim_info.facial_attributes)
+
+        payload = {
+            "face_mods": {},
+        }
+
+        face_modifiers = []
+
+        for modifier in facial_attributes.face_modifiers:
+            body_type = facial_sculpts[str(modifier.key)]["region"] if str(modifier.key) in facial_sculpts else "???"
+            payload["face_mods"][str(modifier.key)] = body_type
+
+
+        for sculpt in params["sculpts"]:
+            modifier = PersistenceBlobs_pb2.BlobSimFacialCustomizationData.Modifier()
+            modifier.key = sculpt
+            modifier.amount = random.random()
+
+            face_modifiers.append(modifier)
+            # payload["face_mods"][str(modifier.key)] = modifier.amount
+
+        # del facial_attributes.face_modifiers[:]
+        # facial_attributes.face_modifiers.extend(face_modifiers)
+        # TODO: body modifiers?
+
+        sim_info.facial_attributes = facial_attributes.SerializeToString()
+        # sim_info.resend_physical_attributes()
+
+        return payload
+
+    except Exception as e:
+        exc_info = sys.exc_info()
+        return {"exception": "".join(traceback.format_exception(*exc_info))}
+
+
+def randomize_facial_sculpts(params):
+    try:
+        first_name = params["first_name"]
+        last_name = params["last_name"]
+        randomized_sculpts = (random.choice(v) for k, v in create_sculpt_buckets().items())
+        sim_info = get_sim_info(first_name, last_name)
+
+        if sim_info is None:
+            return {"error": f"cannot find Sim {first_name} {last_name}"}
+
+        facial_attributes = PersistenceBlobs_pb2.BlobSimFacialCustomizationData()
+        facial_attributes.MergeFromString(sim_info.facial_attributes)
+
+        payload = {
+            "sculpts": list((int(s) for s in randomized_sculpts)),
+        }
+
+        facial_attributes.sculpts[:] = payload["sculpts"]
+
+        sim_info.facial_attributes = facial_attributes.SerializeToString()
+        sim_info.resend_physical_attributes()
+
+        return payload
+
+    except Exception as e:
+        exc_info = sys.exc_info()
+        return {"exception": "".join(traceback.format_exception(*exc_info))}
+
+
+def randomize_facial_casps(params):
+    try:
+        first_name = params["first_name"]
+        last_name = params["last_name"]
+        randomized_casps = {k: random.choice(v) for k, v in create_casp_buckets().items()}
+        sim_info = get_sim_info(first_name, last_name)
+
+        if sim_info is None:
+            return {"error": f"cannot find Sim {first_name} {last_name}"}
+
+        sim_proto = services.get_persistence_service().get_sim_proto_buff(
+            sim_info.sim_id
+        )
+
+        if sim_proto is None:
+            return {"error": "Cannot get SimInfo ProtoBuf object"}
+
+        current_outfit = list(sim_proto.outfits.outfits)[sim_proto.current_outfit_index]
+
+        payload = {
+            "casps": dict(randomized_casps)
+        }
+
+        casps = override_casps(current_outfit, payload["casps"])
+        current_outfit.parts.ids[:] = list(int(c) for c in casps)
+
+        sim_info.resend_physical_attributes()
+
+        return payload
+
+    except Exception as e:
+        exc_info = sys.exc_info()
+        return {"exception": "".join(traceback.format_exception(*exc_info))}
+
+
+def randomize_sim(params):
+    first_pass = randomize_facial_sculpts(params)
+
+    if "sculpts" in first_pass:
+        params["sculpts"] = first_pass["sculpts"]
+
+    second_pass = randomize_facial_attributes(params),
+    # third_pass = randomize_facial_casps(params),
+
+    return [first_pass, second_pass, ]
 
 
 server = Server(("127.0.0.1", 9000))
