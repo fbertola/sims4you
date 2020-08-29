@@ -8,13 +8,6 @@ from tqdm import trange, tqdm
 from src.ai.imitator.data import get_celebA, flags
 from src.ai.imitator.dcgan import get_generator, get_discriminator
 
-import gorilla
-import monkey_patches.tensorlayer.models
-
-patches = gorilla.find_patches([monkey_patches.tensorlayer.models])
-for patch in patches:
-    gorilla.apply(patch)
-
 num_tiles = int(np.sqrt(flags.sample_size))
 
 
@@ -65,6 +58,7 @@ def train():
                 G.save_weights('{}/G.npz'.format(flags.checkpoint_dir), format='npz')
                 D.save_weights('{}/D.npz'.format(flags.checkpoint_dir), format='npz')
                 G.eval()
+                z = np.random.normal(loc=0.0, scale=1.0, size=[flags.batch_size, flags.z_dim]).astype(np.float32)
                 result = G(z)
                 G.train()
                 tl.visualize.save_images(result.numpy(), [num_tiles, num_tiles],
