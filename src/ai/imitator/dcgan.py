@@ -1,115 +1,45 @@
-import numpy as np
 import tensorflow as tf
+import tensorlayer as tl
+from tensorlayer.layers import Input, Dense, DeConv2d, Reshape, BatchNorm2d, Conv2d, Flatten
 
 
-def generator(project_shape, filters_list, strides_list, name="generator"):
-    model = tf.keras.Sequential(name=name)
-    model.add(
-        tf.keras.layers.Dense(
-            units=np.prod(project_shape),
-            use_bias=False,
-            kernel_initializer=tf.random_normal_initializer(mean=0.0, stddev=0.02),
-        )
-    )
-    model.add(tf.keras.layers.BatchNormalization())
-    model.add(tf.keras.layers.ReLU())
-    model.add(tf.keras.layers.Reshape(target_shape=project_shape))
-    for filters, strides in zip(filters_list[:-1], strides_list[:-1]):
-        model.add(
-            tf.keras.layers.Conv2DTranspose(
-                filters=filters,
-                kernel_size=[5, 5],
-                strides=strides,
-                padding="same",
-                use_bias=False,
-                kernel_initializer=tf.random_normal_initializer(mean=0.0, stddev=0.02),
-            )
-        )
-        model.add(tf.keras.layers.BatchNormalization())
-        model.add(tf.keras.layers.ReLU())
-    model.add(
-        tf.keras.layers.Conv2DTranspose(
-            filters=filters_list[-1],
-            kernel_size=[5, 5],
-            strides=strides_list[-1],
-            padding="same",
-            activation=tf.nn.tanh,
-            kernel_initializer=tf.random_normal_initializer(mean=0.0, stddev=0.02),
-        )
-    )
+def get_generator(shape, gf_dim=64):  # Dimension of gen filters in first conv layer. [64]
+    image_size = 64
+    s16 = image_size // 16
+    # w_init = tf.glorot_normal_initializer()
+    w_init = tf.random_normal_initializer(stddev=0.02)
+    gamma_init = tf.random_normal_initializer(1., 0.02)
 
-    return model
+    ni = Input(shape)
+    nn = Dense(n_units=(gf_dim * 8 * s16 * s16), W_init=w_init, b_init=None)(ni)
+    nn = Reshape(shape=[-1, s16, s16, gf_dim * 8])(nn)
+    nn = BatchNorm2d(decay=0.9, act=tf.nn.relu, gamma_init=gamma_init, name=None)(nn)
+    nn = DeConv2d(gf_dim * 4, (5, 5), (2, 2), W_init=w_init, b_init=None)(nn)
+    nn = BatchNorm2d(decay=0.9, act=tf.nn.relu, gamma_init=gamma_init)(nn)
+    nn = DeConv2d(gf_dim * 2, (5, 5), (2, 2), W_init=w_init, b_init=None)(nn)
+    nn = BatchNorm2d(decay=0.9, act=tf.nn.relu, gamma_init=gamma_init)(nn)
+    nn = DeConv2d(gf_dim, (5, 5), (2, 2), W_init=w_init, b_init=None)(nn)
+    nn = BatchNorm2d(decay=0.9, act=tf.nn.relu, gamma_init=gamma_init)(nn)
+    nn = DeConv2d(3, (5, 5), (2, 2), act=tf.nn.tanh, W_init=w_init)(nn)
+
+    return tl.models.Model(inputs=ni, outputs=nn, name='generator')
 
 
-def discriminator(filters_list, strides_list, name="discriminator"):
-    model = tf.keras.Sequential(name=name)
-    for filters, strides in zip(filters_list, strides_list):
-        model.add(
-            tf.keras.layers.Conv2D(
-                filters=filters,
-                kernel_size=[5, 5],
-                strides=strides,
-                padding="same",
-                use_bias=False,
-                kernel_initializer=tf.random_normal_initializer(mean=0.0, stddev=0.02),
-            )
-        )
-        model.add(tf.keras.layers.BatchNormalization())
-        model.add(tf.keras.layers.LeakyReLU(alpha=0.2))
-    model.add(tf.keras.layers.Flatten())
-    model.add(
-        tf.keras.layers.Dense(
-            units=1,
-            activation=tf.nn.sigmoid,
-            kernel_initializer=tf.random_normal_initializer(mean=0.0, stddev=0.02),
-        )
-    )
+def get_discriminator(shape, df_dim=64):  # Dimension of discrim filters in first conv layer. [64]
+    # w_init = tf.glorot_normal_initializer()
+    w_init = tf.random_normal_initializer(stddev=0.02)
+    gamma_init = tf.random_normal_initializer(1., 0.02)
+    lrelu = lambda x: tf.nn.leaky_relu(x, 0.2)
 
-    return model
+    ni = Input(shape)
+    nn = Conv2d(df_dim, (5, 5), (2, 2), act=lrelu, W_init=w_init)(ni)
+    nn = Conv2d(df_dim * 2, (5, 5), (2, 2), W_init=w_init, b_init=None)(nn)
+    nn = BatchNorm2d(decay=0.9, act=lrelu, gamma_init=gamma_init)(nn)
+    nn = Conv2d(df_dim * 4, (5, 5), (2, 2), W_init=w_init, b_init=None)(nn)
+    nn = BatchNorm2d(decay=0.9, act=lrelu, gamma_init=gamma_init)(nn)
+    nn = Conv2d(df_dim * 8, (5, 5), (2, 2), W_init=w_init, b_init=None)(nn)
+    nn = BatchNorm2d(decay=0.9, act=lrelu, gamma_init=gamma_init)(nn)
+    nn = Flatten()(nn)
+    nn = Dense(n_units=1, act=tf.identity, W_init=w_init)(nn)
 
-
-class DCGAN(object):
-    def __init__(
-        self,
-        project_shape,
-        gen_filters_list,
-        gen_strides_list,
-        disc_filters_list,
-        disc_strides_list,
-    ):
-        self.project_shape = project_shape
-        self.gen_filters_list = gen_filters_list
-        self.gen_strides_list = gen_strides_list
-        self.disc_filters_list = disc_filters_list
-        self.disc_strides_list = disc_strides_list
-
-        self.generator = generator(
-            self.project_shape, self.gen_filters_list, self.gen_strides_list
-        )
-        self.discriminator = discriminator(
-            self.disc_filters_list, self.disc_strides_list
-        )
-
-    def generator_loss(self, z):
-        x_fake = self.generator(z, training=True)
-        fake_score = self.discriminator(x_fake, training=True)
-
-        loss = tf.keras.losses.binary_crossentropy(
-            y_true=tf.ones_like(fake_score), y_pred=fake_score, from_logits=False
-        )
-
-        return loss
-
-    def discriminator_loss(self, x, z):
-        x_fake = self.generator(z, training=True)
-        fake_score = self.discriminator(x_fake, training=True)
-        true_score = self.discriminator(x, training=True)
-
-        # FIXME: Dimensions must be equal, but are 32 and 64
-        loss = tf.keras.losses.binary_crossentropy(
-            y_true=tf.ones_like(true_score), y_pred=true_score, from_logits=False
-        ) + tf.keras.losses.binary_crossentropy(
-            y_true=tf.zeros_like(fake_score), y_pred=fake_score, from_logits=False
-        )
-
-        return loss
+    return tl.models.Model(inputs=ni, outputs=nn, name='discriminator')
