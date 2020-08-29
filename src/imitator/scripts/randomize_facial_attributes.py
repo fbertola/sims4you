@@ -152,9 +152,12 @@ def randomize_facial_attributes(params):
         face_modifiers = []
 
         for modifier in facial_attributes.face_modifiers:
-            body_type = facial_sculpts[str(modifier.key)]["region"] if str(modifier.key) in facial_sculpts else "???"
+            body_type = (
+                facial_sculpts[str(modifier.key)]["region"]
+                if str(modifier.key) in facial_sculpts
+                else "???"
+            )
             payload["face_mods"][str(modifier.key)] = body_type
-
 
         for sculpt in params["sculpts"]:
             modifier = PersistenceBlobs_pb2.BlobSimFacialCustomizationData.Modifier()
@@ -182,7 +185,9 @@ def randomize_facial_sculpts(params):
     try:
         first_name = params["first_name"]
         last_name = params["last_name"]
-        randomized_sculpts = (random.choice(v) for k, v in create_sculpt_buckets().items())
+        randomized_sculpts = (
+            random.choice(v) for k, v in create_sculpt_buckets().items()
+        )
         sim_info = get_sim_info(first_name, last_name)
 
         if sim_info is None:
@@ -211,7 +216,9 @@ def randomize_facial_casps(params):
     try:
         first_name = params["first_name"]
         last_name = params["last_name"]
-        randomized_casps = {k: random.choice(v) for k, v in create_casp_buckets().items()}
+        randomized_casps = {
+            k: random.choice(v) for k, v in create_casp_buckets().items()
+        }
         sim_info = get_sim_info(first_name, last_name)
 
         if sim_info is None:
@@ -226,9 +233,7 @@ def randomize_facial_casps(params):
 
         current_outfit = list(sim_proto.outfits.outfits)[sim_proto.current_outfit_index]
 
-        payload = {
-            "casps": dict(randomized_casps)
-        }
+        payload = {"casps": dict(randomized_casps)}
 
         casps = override_casps(current_outfit, payload["casps"])
         current_outfit.parts.ids[:] = list(int(c) for c in casps)
@@ -248,10 +253,13 @@ def randomize_sim(params):
     if "sculpts" in first_pass:
         params["sculpts"] = first_pass["sculpts"]
 
-    second_pass = randomize_facial_attributes(params),
+    second_pass = (randomize_facial_attributes(params),)
     # third_pass = randomize_facial_casps(params),
 
-    return [first_pass, second_pass, ]
+    return [
+        first_pass,
+        second_pass,
+    ]
 
 
 server = Server(("127.0.0.1", 9000))
