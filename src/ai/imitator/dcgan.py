@@ -1,45 +1,58 @@
 import tensorflow as tf
-import tensorlayer as tl
-from tensorlayer.layers import Input, Dense, DeConv2d, Reshape, BatchNorm2d, Conv2d, Flatten
+from tensorflow.keras import layers
 
 
-def get_generator(shape, gf_dim=64):  # Dimension of gen filters in first conv layer. [64]
-    image_size = 64
-    s16 = image_size // 16
-    # w_init = tf.glorot_normal_initializer()
-    w_init = tf.random_normal_initializer(stddev=0.02)
-    gamma_init = tf.random_normal_initializer(1., 0.02)
+def make_generator_model():
+    model = tf.keras.Sequential()
+    model.add(layers.Dense(7 * 7 * 256, use_bias=False, input_shape=(100,)))
+    model.add(layers.BatchNormalization())
+    model.add(layers.LeakyReLU())
 
-    ni = Input(shape)
-    nn = Dense(n_units=(gf_dim * 8 * s16 * s16), W_init=w_init, b_init=None)(ni)
-    nn = Reshape(shape=[-1, s16, s16, gf_dim * 8])(nn)
-    nn = BatchNorm2d(decay=0.9, act=tf.nn.relu, gamma_init=gamma_init, name=None)(nn)
-    nn = DeConv2d(gf_dim * 4, (5, 5), (2, 2), W_init=w_init, b_init=None)(nn)
-    nn = BatchNorm2d(decay=0.9, act=tf.nn.relu, gamma_init=gamma_init)(nn)
-    nn = DeConv2d(gf_dim * 2, (5, 5), (2, 2), W_init=w_init, b_init=None)(nn)
-    nn = BatchNorm2d(decay=0.9, act=tf.nn.relu, gamma_init=gamma_init)(nn)
-    nn = DeConv2d(gf_dim, (5, 5), (2, 2), W_init=w_init, b_init=None)(nn)
-    nn = BatchNorm2d(decay=0.9, act=tf.nn.relu, gamma_init=gamma_init)(nn)
-    nn = DeConv2d(3, (5, 5), (2, 2), act=tf.nn.tanh, W_init=w_init)(nn)
+    model.add(layers.Reshape((7, 7, 256)))
+    assert model.output_shape == (None, 7, 7, 256)  # Note: None is the batch size
 
-    return tl.models.Model(inputs=ni, outputs=nn, name='generator')
+    model.add(layers.Conv2DTranspose(128, (5, 5), strides=(1, 1), padding='same', use_bias=False))
+    assert model.output_shape == (None, 7, 7, 128)
+    model.add(layers.BatchNormalization())
+    model.add(layers.LeakyReLU())
+
+    model.add(layers.Conv2DTranspose(64, (5, 5), strides=(2, 2), padding='same', use_bias=False))
+    assert model.output_shape == (None, 14, 14, 64)
+    model.add(layers.BatchNormalization())
+    model.add(layers.LeakyReLU())
+
+    model.add(layers.Conv2DTranspose(1, (5, 5), strides=(2, 2), padding='same', use_bias=False, activation='tanh'))
+    assert model.output_shape == (None, 28, 28, 1)
+
+    return model
 
 
-def get_discriminator(shape, df_dim=64):  # Dimension of discrim filters in first conv layer. [64]
-    # w_init = tf.glorot_normal_initializer()
-    w_init = tf.random_normal_initializer(stddev=0.02)
-    gamma_init = tf.random_normal_initializer(1., 0.02)
-    lrelu = lambda x: tf.nn.leaky_relu(x, 0.2)
+def make_discriminator_model():
+    model = tf.keras.Sequential()
+    model.add(layers.Conv2D(64, (5, 5), strides=(2, 2), padding='same',
+                            input_shape=[28, 28, 1]))
+    model.add(layers.LeakyReLU())
+    model.add(layers.Dropout(0.3))
 
-    ni = Input(shape)
-    nn = Conv2d(df_dim, (5, 5), (2, 2), act=lrelu, W_init=w_init)(ni)
-    nn = Conv2d(df_dim * 2, (5, 5), (2, 2), W_init=w_init, b_init=None)(nn)
-    nn = BatchNorm2d(decay=0.9, act=lrelu, gamma_init=gamma_init)(nn)
-    nn = Conv2d(df_dim * 4, (5, 5), (2, 2), W_init=w_init, b_init=None)(nn)
-    nn = BatchNorm2d(decay=0.9, act=lrelu, gamma_init=gamma_init)(nn)
-    nn = Conv2d(df_dim * 8, (5, 5), (2, 2), W_init=w_init, b_init=None)(nn)
-    nn = BatchNorm2d(decay=0.9, act=lrelu, gamma_init=gamma_init)(nn)
-    nn = Flatten()(nn)
-    nn = Dense(n_units=1, act=tf.identity, W_init=w_init)(nn)
+    model.add(layers.Conv2D(128, (5, 5), strides=(2, 2), padding='same'))
+    model.add(layers.LeakyReLU())
+    model.add(layers.Dropout(0.3))
 
-    return tl.models.Model(inputs=ni, outputs=nn, name='discriminator')
+    model.add(layers.Flatten())
+    model.add(layers.Dense(1))
+
+    return model
+
+
+cross_entropy = tf.keras.losses.BinaryCrossentropy(from_logits=True)
+
+
+def discriminator_loss(real_output, fake_output):
+    real_loss = cross_entropy(tf.ones_like(real_output), real_output)
+    fake_loss = cross_entropy(tf.zeros_like(fake_output), fake_output)
+    total_loss = real_loss + fake_loss
+    return total_loss
+
+
+def generator_loss(fake_output):
+    return cross_entropy(tf.ones_like(fake_output), fake_output)

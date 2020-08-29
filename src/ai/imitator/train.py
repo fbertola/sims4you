@@ -1,69 +1,94 @@
+import os
 import time
 
-import numpy as np
+import matplotlib.pyplot as plt
 import tensorflow as tf
-import tensorlayer as tl
 from tqdm import trange, tqdm
 
-from src.ai.imitator.data import get_celebA, flags
-from src.ai.imitator.dcgan import get_generator, get_discriminator
+from src.ai.imitator.data import train_dataset, BATCH_SIZE
+from src.ai.imitator.dcgan import make_generator_model, make_discriminator_model, generator_loss, discriminator_loss
 
-num_tiles = int(np.sqrt(flags.sample_size))
+generator = make_generator_model()
+discriminator = make_discriminator_model()
+
+generator_optimizer = tf.keras.optimizers.Adam(1e-4)
+discriminator_optimizer = tf.keras.optimizers.Adam(1e-4)
+
+checkpoint_dir = './training_checkpoints'
+checkpoint_prefix = os.path.join(checkpoint_dir, "ckpt")
+checkpoint = tf.train.Checkpoint(generator_optimizer=generator_optimizer,
+                                 discriminator_optimizer=discriminator_optimizer,
+                                 generator=generator,
+                                 discriminator=discriminator)
+
+EPOCHS = 50
+noise_dim = 100
+num_examples_to_generate = 16
+
+# We will reuse this seed overtime (so it's easier)
+# to visualize progress in the animated GIF)
+seed = tf.random.normal([num_examples_to_generate, noise_dim])
 
 
-def train():
-    images, images_path = get_celebA(flags.output_size, flags.n_epoch, flags.batch_size)
-    G = get_generator([None, flags.z_dim])
-    D = get_discriminator([None, flags.output_size, flags.output_size, flags.c_dim])
+@tf.function
+def train_step(images):
+    noise = tf.random.normal([BATCH_SIZE, noise_dim])
 
-    G.train()
-    D.train()
+    with tf.GradientTape() as gen_tape, tf.GradientTape() as disc_tape:
+        generated_images = generator(noise, training=True)
 
-    d_optimizer = tf.optimizers.Adam(flags.lr, beta_1=flags.beta1)
-    g_optimizer = tf.optimizers.Adam(flags.lr, beta_1=flags.beta1)
+        real_output = discriminator(images, training=True)
+        fake_output = discriminator(generated_images, training=True)
 
-    n_step_epoch = int(len(images_path) // flags.batch_size)
+        gen_loss = generator_loss(fake_output)
+        disc_loss = discriminator_loss(real_output, fake_output)
 
-    # Z = tf.distributions.Normal(0., 1.)
-    with trange(flags.n_epoch) as t:
-        for epoch in t:
-            for step, batch_images in enumerate(tqdm(images)):
-                if batch_images.shape[0] != flags.batch_size:  # if the remaining data in this epoch < batch_size
-                    break
-                step_time = time.time()
-                with tf.GradientTape(persistent=True) as tape:
-                    # z = Z.sample([flags.batch_size, flags.z_dim])
-                    z = np.random.normal(loc=0.0, scale=1.0, size=[flags.batch_size, flags.z_dim]).astype(np.float32)
-                    d_logits = D(G(z))
-                    d2_logits = D(batch_images)
-                    # discriminator: real images are labelled as 1
-                    d_loss_real = tl.cost.sigmoid_cross_entropy(d2_logits, tf.ones_like(d2_logits), name='dreal')
-                    # discriminator: images from generator (fake) are labelled as 0
-                    d_loss_fake = tl.cost.sigmoid_cross_entropy(d_logits, tf.zeros_like(d_logits), name='dfake')
-                    # combined loss for updating discriminator
-                    d_loss = d_loss_real + d_loss_fake
-                    # generator: try to fool discriminator to output 1
-                    g_loss = tl.cost.sigmoid_cross_entropy(d_logits, tf.ones_like(d_logits), name='gfake')
+    gradients_of_generator = gen_tape.gradient(gen_loss, generator.trainable_variables)
+    gradients_of_discriminator = disc_tape.gradient(disc_loss, discriminator.trainable_variables)
 
-                grad = tape.gradient(g_loss, G.trainable_weights)
-                g_optimizer.apply_gradients(zip(grad, G.trainable_weights))
-                grad = tape.gradient(d_loss, D.trainable_weights)
-                d_optimizer.apply_gradients(zip(grad, D.trainable_weights))
-                del tape
+    generator_optimizer.apply_gradients(zip(gradients_of_generator, generator.trainable_variables))
+    discriminator_optimizer.apply_gradients(zip(gradients_of_discriminator, discriminator.trainable_variables))
 
-                t.set_description(f"Epoch: [{epoch}/{flags.n_epoch}]")
-                t.set_postfix(g_loss=g_loss, d_loss=g_loss)
 
-            if np.mod(epoch, flags.save_every_epoch) == 0:
-                G.save_weights('{}/G.npz'.format(flags.checkpoint_dir), format='npz')
-                D.save_weights('{}/D.npz'.format(flags.checkpoint_dir), format='npz')
-                G.eval()
-                z = np.random.normal(loc=0.0, scale=1.0, size=[flags.batch_size, flags.z_dim]).astype(np.float32)
-                result = G(z)
-                G.train()
-                tl.visualize.save_images(result.numpy(), [num_tiles, num_tiles],
-                                         '{}/train_{:02d}.png'.format(flags.sample_dir, epoch))
+def train(dataset, epochs):
+    for epoch in trange(epochs):
+        start = time.time()
+
+        for image_batch in tqdm(dataset):
+            train_step(image_batch)
+
+        # Produce images for the GIF as we go
+        generate_and_save_images(generator,
+                                 epoch + 1,
+                                 seed)
+
+        # Save the model every 15 epochs
+        if (epoch + 1) % 15 == 0:
+            checkpoint.save(file_prefix=checkpoint_prefix)
+
+        print('Time for epoch {} is {} sec'.format(epoch + 1, time.time() - start))
+
+        # Generate after the final epoch
+    generate_and_save_images(generator,
+                             epochs,
+                             seed)
+
+
+def generate_and_save_images(model, epoch, test_input):
+    # Notice `training` is set to False.
+    # This is so all layers run in inference mode (batchnorm).
+    predictions = model(test_input, training=False)
+
+    fig = plt.figure(figsize=(4, 4))
+
+    for i in range(predictions.shape[0]):
+        plt.subplot(4, 4, i + 1)
+        plt.imshow(predictions[i, :, :, 0] * 127.5 + 127.5, cmap='gray')
+        plt.axis('off')
+
+    plt.savefig('image_at_epoch_{:04d}.png'.format(epoch))
+    # plt.show()
 
 
 if __name__ == '__main__':
-    train()
+    train(train_dataset, EPOCHS)
