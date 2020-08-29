@@ -55,9 +55,7 @@ if __name__ == "__main__":
     }
 
     with Client(("127.0.0.1", 9000)) as client:
-        import time
-
-        time.sleep(1)
         response = client.send([message])
+
     pretty_json = pprint.pformat(response)
     print(pretty_json)
