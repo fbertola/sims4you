@@ -3,7 +3,7 @@ name = "sims4you"
 version = "1.0.0"
 description = "The Sims 4 character generator."
 authors = [
-    "Federico Bertola <federico.bertola88@gmail.com>"
+    "Federico Bertola"
 ]
 license = "MIT"
 
@@ -26,6 +26,9 @@ click = "^7.1.2"
 pygdbmi = "^0.9.0"
 colorama = "^0.4.3"
 ffmpeg-python = "^0.2.0"
+tensorflow = "2.2.0"
+loguru = "^0.5.1"
+tqdm = "^4.48.2"
 
 [tool.poetry.dev-dependencies]
 pytest = "^5.4.3"
