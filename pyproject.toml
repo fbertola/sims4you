@@ -26,9 +26,10 @@ click = "^7.1.2"
 pygdbmi = "^0.9.0"
 colorama = "^0.4.3"
 ffmpeg-python = "^0.2.0"
-tensorflow = "2.2.0"
+tensorflow = "^2.2.0"
 loguru = "^0.5.1"
 tqdm = "^4.48.2"
+tensorlayer = "^2.2.3"
 
 [tool.poetry.dev-dependencies]
 pytest = "^5.4.3"
