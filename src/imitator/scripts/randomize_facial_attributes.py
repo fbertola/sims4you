@@ -151,28 +151,27 @@ def randomize_facial_attributes(params):
 
         face_modifiers = []
 
-        for modifier in facial_attributes.face_modifiers:
-            body_type = (
-                facial_sculpts[str(modifier.key)]["region"]
-                if str(modifier.key) in facial_sculpts
-                else "???"
-            )
-            payload["face_mods"][str(modifier.key)] = body_type
+        for k, v in facial_modifiers.items():
+            ages = v["age"]
+            genders = v["gender"]
 
-        for sculpt in params["sculpts"]:
+            # FIXME: this should be configurable
+            if ("Male" not in genders and "Unisex" not in genders) or "Adult" not in ages:
+                continue
+
+            amount = random.random()
+            payload["face_mods"][k] = amount
             modifier = PersistenceBlobs_pb2.BlobSimFacialCustomizationData.Modifier()
-            modifier.key = sculpt
+            modifier.key = int(v)
             modifier.amount = random.random()
-
             face_modifiers.append(modifier)
-            # payload["face_mods"][str(modifier.key)] = modifier.amount
 
-        # del facial_attributes.face_modifiers[:]
-        # facial_attributes.face_modifiers.extend(face_modifiers)
+        del facial_attributes.face_modifiers[:]
+        facial_attributes.face_modifiers.extend(face_modifiers)
         # TODO: body modifiers?
 
         sim_info.facial_attributes = facial_attributes.SerializeToString()
-        # sim_info.resend_physical_attributes()
+        sim_info.resend_physical_attributes()
 
         return payload
 
