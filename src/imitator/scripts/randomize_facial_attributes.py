@@ -67,7 +67,9 @@ def create_casp_buckets():
         genders = v["gender"]
 
         # FIXME: should be configurable
-        if ("Male" not in genders and "Unisex" not in genders) or "Adult" not in ages:
+        if ("Male" not in genders and "Unisex" not in genders) \
+                or "Adult" not in ages\
+                or "Mannequin" in v["name"]:
             continue
 
         if body_type in casp_buckets:
@@ -162,7 +164,7 @@ def randomize_facial_attributes(params):
             amount = random.random()
             payload["face_mods"][k] = amount
             modifier = PersistenceBlobs_pb2.BlobSimFacialCustomizationData.Modifier()
-            modifier.key = int(v)
+            modifier.key = int(k)
             modifier.amount = random.random()
             face_modifiers.append(modifier)
 
@@ -237,6 +239,7 @@ def randomize_facial_casps(params):
         casps = override_casps(current_outfit, payload["casps"])
         current_outfit.parts.ids[:] = list(int(c) for c in casps)
 
+        sim_info.load_sim_info(sim_proto)
         sim_info.resend_physical_attributes()
 
         return payload
@@ -247,17 +250,10 @@ def randomize_facial_casps(params):
 
 
 def randomize_sim(params):
-    first_pass = randomize_facial_sculpts(params)
-
-    if "sculpts" in first_pass:
-        params["sculpts"] = first_pass["sculpts"]
-
-    second_pass = (randomize_facial_attributes(params),)
-    # third_pass = randomize_facial_casps(params),
-
     return [
-        first_pass,
-        second_pass,
+        randomize_facial_casps(params),
+        randomize_facial_sculpts(params),
+        randomize_facial_attributes(params),
     ]
 
 
