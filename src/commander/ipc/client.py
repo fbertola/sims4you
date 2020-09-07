@@ -2,6 +2,9 @@ import pickle
 import socket
 import struct
 import pprint
+import time
+
+from src.commander.ipc.utils.screenshot_utils import take_window_screenshot
 
 
 class Client(object):
@@ -59,3 +62,7 @@ if __name__ == "__main__":
 
     pretty_json = pprint.pformat(response)
     print(pretty_json)
+
+    time.sleep(1)
+
+    take_window_screenshot("The Sims")
