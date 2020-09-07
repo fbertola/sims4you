@@ -166,11 +166,12 @@ def randomize_facial_attributes(params):
             modifier = PersistenceBlobs_pb2.BlobSimFacialCustomizationData.Modifier()
             modifier.key = int(k)
             modifier.amount = random.random()
-            face_modifiers.append(modifier)
+
+            if modifier.amount > 0:
+                face_modifiers.append(modifier)
 
         del facial_attributes.face_modifiers[:]
         facial_attributes.face_modifiers.extend(face_modifiers)
-        # TODO: body modifiers?
 
         sim_info.facial_attributes = facial_attributes.SerializeToString()
         sim_info.resend_physical_attributes()
@@ -217,8 +218,9 @@ def randomize_facial_casps(params):
     try:
         first_name = params["first_name"]
         last_name = params["last_name"]
+        casp_buckets = create_casp_buckets()
         randomized_casps = {
-            k: random.choice(v) for k, v in create_casp_buckets().items()
+            k: random.choice(v) for k, v in casp_buckets.items() if random.getrandbits(1)
         }
         sim_info = get_sim_info(first_name, last_name)
 
